@@ -1,5 +1,11 @@
 Config = {}
-   
+
+
+Config.Prompts = {
+    Prompt1 = 0x760A9C6F, -- G Key
+
+}
+
     
 --Job name for elections allowed folks.  Admin is allowed to run results by default
 Config.ElectionOfficials={
