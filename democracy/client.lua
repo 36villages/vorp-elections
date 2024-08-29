@@ -15,29 +15,26 @@ TriggerEvent("vorp_menu:getData",function(cb)
    end)
 
 --Following Thread looks for ped in radius of voting locations the in config and offers G for menu
-Citizen.CreateThread(function()
-    while true do
-        local playerPed = PlayerPedId()
-        local coords = GetEntityCoords(playerPed)
-        
-        for k, v in pairs(Config.VotingLocations) do 
-            local distance = GetDistanceBetweenCoords(coords, v.coords.x, v.coords.y, v.coords.z, true)
-            
-            if distance < 10.0 then
-                DrawTxt('Press G to Vote', 0.50, 0.85, 0.7, 0.7, true, 255, 255, 255, 255, true)
-                
-                if IsControlJustReleased(0, 0x760A9C6F) then
-                    local city = v.city 
-                    local region = v.region
-                    TriggerEvent('democracy:votingbooth',city, region)   
-                    Citizen.Wait(1000)
-                end
-            end
-        end
-        
-        Citizen.Wait(0)
-    end
-end)
+local VotePromptKey
+local VotePromptGroup = GetRandomIntInRange(0, 0xffffff)
+
+function LoadVotingPrompt()
+    local str = "Press G to Vote"
+    VotePromptKey = PromptRegisterBegin()
+    PromptSetControlAction(VotePromptKey, 0x760A9C6F) -- G key
+    str = CreateVarString(10, 'LITERAL_STRING', str)
+    PromptSetText(VotePromptKey, str)
+    PromptSetEnabled(VotePromptKey, 1)
+    PromptSetVisible(VotePromptKey, 1)
+    PromptSetStandardMode(VotePromptKey, 1)
+    PromptSetGroup(VotePromptKey, VotePromptGroup)
+    Citizen.InvokeNative(0xC5F428EE08FA7F2C, VotePromptKey, true)
+    PromptRegisterEnd(VotePromptKey)
+end
+
+-- Call LoadVotingPrompt to initialize the prompt
+LoadVotingPrompt()
+
 
 RegisterNetEvent('democracy:votingbooth')
 AddEventHandler('democracy:votingbooth', function(city, region)
@@ -338,16 +335,32 @@ function CastVote(registered,city, region, position,jurisdiction,candidateid,bal
     end, { city = vcity, region = vregion, jurisdiction = jurisdiction, position = position, candidateid, ballotid })
 end
 
-function DrawTxt(str, x, y, w, h, enableShadow, col1, col2, col3, a, centre)
-    local str = CreateVarString(10, "LITERAL_STRING", str)
-    SetTextScale(w, h)
-    SetTextColor(math.floor(col1), math.floor(col2), math.floor(col3), math.floor(a))
-	SetTextCentre(centre)
-	SetTextFontForCurrentCommand(15) 
-    if enableShadow then SetTextDropshadow(1, 0, 0, 0, 255) end
-	--Citizen.InvokeNative(0xADA9255D, 1);
-    DisplayText(str, x, y)
-end
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(0) -- Keep checking every frame
+
+        local playerPed = PlayerPedId()
+        local coords = GetEntityCoords(playerPed)
+
+        for k, v in pairs(Config.VotingLocations) do
+            local distance = GetDistanceBetweenCoords(coords, v.coords.x, v.coords.y, v.coords.z, true)
+
+            -- If within 10 units of distance, display the prompt
+            if distance < 1.0 then
+                PromptSetActiveGroupThisFrame(VotePromptGroup, CreateVarString(10, 'LITERAL_STRING', "Press G to Vote"))
+
+                -- Check if the prompt action is triggered
+                if Citizen.InvokeNative(0xC92AC953F0A982AE, VotePromptKey) then
+                    local city = v.city
+                    local region = v.region
+                    TriggerEvent('democracy:votingbooth', city, region)
+                    Citizen.Wait(1000) -- Prevent multiple triggers
+                end
+            end
+        end
+    end
+end)
+
 RegisterNetEvent('democracy:stoprunning')
 AddEventHandler('democracy:stoprunning', function()
     --Lets get what they are running for from the database and show them.
